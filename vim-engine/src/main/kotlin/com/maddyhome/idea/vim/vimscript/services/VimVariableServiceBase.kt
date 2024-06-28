@@ -8,6 +8,7 @@
 
 package com.maddyhome.idea.vim.vimscript.services
 
+import com.maddyhome.idea.vim.KeyHandler
 import com.maddyhome.idea.vim.api.ExecutionContext
 import com.maddyhome.idea.vim.api.Key
 import com.maddyhome.idea.vim.api.VimEditor
@@ -15,7 +16,6 @@ import com.maddyhome.idea.vim.api.getOrPutBufferData
 import com.maddyhome.idea.vim.api.getOrPutTabData
 import com.maddyhome.idea.vim.api.getOrPutWindowData
 import com.maddyhome.idea.vim.api.injector
-import com.maddyhome.idea.vim.state.VimStateMachine
 import com.maddyhome.idea.vim.common.Direction
 import com.maddyhome.idea.vim.ex.ExException
 import com.maddyhome.idea.vim.vimscript.model.ExecutableContext
@@ -27,7 +27,7 @@ import com.maddyhome.idea.vim.vimscript.model.expressions.Variable
 import com.maddyhome.idea.vim.vimscript.model.statements.FunctionDeclaration
 import com.maddyhome.idea.vim.vimscript.model.statements.FunctionFlag
 
-public abstract class VimVariableServiceBase : VariableService {
+abstract class VimVariableServiceBase : VariableService {
   private var globalVariables: MutableMap<String, VimDataType> = mutableMapOf()
   private val windowVariablesKey = Key<MutableMap<String, VimDataType>>("TabVariables")
   private val bufferVariablesKey = Key<MutableMap<String, VimDataType>>("BufferVariables")
@@ -174,11 +174,11 @@ public abstract class VimVariableServiceBase : VariableService {
   protected open fun getVimVariable(name: String, editor: VimEditor, context: ExecutionContext, vimContext: VimLContext): VimDataType? {
     return when (name) {
       "count" -> {
-        val count = VimStateMachine.getInstance(editor).commandBuilder.count
+        val count = KeyHandler.getInstance().keyHandlerState.commandBuilder.count
         VimInt(count)
       }
       "count1" -> {
-        val count1 = VimStateMachine.getInstance(editor).commandBuilder.count.coerceAtLeast(1)
+        val count1 = KeyHandler.getInstance().keyHandlerState.commandBuilder.count.coerceAtLeast(1)
         VimInt(count1)
       }
       "searchforward" -> {
@@ -189,7 +189,7 @@ public abstract class VimVariableServiceBase : VariableService {
     }
   }
 
-  public override fun storeGlobalVariable(name: String, value: VimDataType) {
+  override fun storeGlobalVariable(name: String, value: VimDataType) {
     globalVariables[name] = value
   }
 

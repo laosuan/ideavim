@@ -44,6 +44,7 @@ import com.maddyhome.idea.vim.api.VimOptionGroup
 import com.maddyhome.idea.vim.api.VimProcessGroup
 import com.maddyhome.idea.vim.api.VimPsiService
 import com.maddyhome.idea.vim.api.VimRedrawService
+import com.maddyhome.idea.vim.api.VimRegexServiceBase
 import com.maddyhome.idea.vim.api.VimRegexpService
 import com.maddyhome.idea.vim.api.VimScrollGroup
 import com.maddyhome.idea.vim.api.VimSearchGroup
@@ -70,7 +71,6 @@ import com.maddyhome.idea.vim.group.IjVimOptionGroup
 import com.maddyhome.idea.vim.group.IjVimPsiService
 import com.maddyhome.idea.vim.group.MacroGroup
 import com.maddyhome.idea.vim.group.MotionGroup
-import com.maddyhome.idea.vim.group.SearchGroup
 import com.maddyhome.idea.vim.group.TabService
 import com.maddyhome.idea.vim.group.VimWindowGroup
 import com.maddyhome.idea.vim.group.WindowGroup
@@ -89,7 +89,6 @@ import com.maddyhome.idea.vim.state.VimStateMachine
 import com.maddyhome.idea.vim.ui.VimRcFileState
 import com.maddyhome.idea.vim.undo.VimUndoRedo
 import com.maddyhome.idea.vim.vimscript.Executor
-import com.maddyhome.idea.vim.vimscript.services.PatternService
 import com.maddyhome.idea.vim.vimscript.services.VariableService
 import com.maddyhome.idea.vim.yank.VimYankGroup
 import com.maddyhome.idea.vim.yank.YankGroupBase
@@ -119,7 +118,7 @@ internal class IjVimInjector : VimInjectorBase() {
   override val tabService: TabService
     get() = service()
   override val regexpService: VimRegexpService
-    get() = PatternService
+    get() = VimRegexServiceBase()
   override val clipboardManager: VimClipboardManager
     get() = service<IjClipboardManager>()
   override val searchHelper: VimSearchHelper
@@ -133,7 +132,7 @@ internal class IjVimInjector : VimInjectorBase() {
   override val templateManager: VimTemplateManager
     get() = service<IjTemplateManager>()
   override val searchGroup: VimSearchGroup
-    get() = service<SearchGroup>()
+    get() = service<IjVimSearchGroup>()
   override val put: VimPut
     get() = service<PutGroup>()
   override val window: VimWindowGroup
@@ -233,10 +232,10 @@ internal class IjVimInjector : VimInjectorBase() {
 /**
  * Convenience function to get the IntelliJ implementation specific global option accessor
  */
-public fun VimInjector.globalIjOptions(): GlobalIjOptions = (this.optionGroup as IjVimOptionGroup).getGlobalIjOptions()
+fun VimInjector.globalIjOptions(): GlobalIjOptions = (this.optionGroup as IjVimOptionGroup).getGlobalIjOptions()
 
 /**
  * Convenience function to get the IntelliJ implementation specific option accessor for the given editor's scope
  */
-public fun VimInjector.ijOptions(editor: VimEditor): EffectiveIjOptions =
+fun VimInjector.ijOptions(editor: VimEditor): EffectiveIjOptions =
   (this.optionGroup as IjVimOptionGroup).getEffectiveIjOptions(editor)

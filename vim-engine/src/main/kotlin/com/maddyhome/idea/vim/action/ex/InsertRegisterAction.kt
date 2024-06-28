@@ -22,12 +22,19 @@ import java.awt.event.KeyEvent
 import javax.swing.KeyStroke
 
 @CommandOrMotion(keys = ["<C-R>"], modes = [Mode.CMD_LINE])
-public class InsertRegisterAction: VimActionHandler.SingleExecution() {
+class InsertRegisterAction: VimActionHandler.SingleExecution() {
   override val argumentType: Argument.Type = Argument.Type.CHARACTER
   override val type: Command.Type = Command.Type.OTHER_WRITABLE
 
+  override fun onStartWaitingForArgument(editor: VimEditor, context: ExecutionContext) {
+    val cmdLine = injector.commandLine.getActiveCommandLine() ?: return
+    cmdLine.setPromptCharacter('"')
+  }
+
   override fun execute(editor: VimEditor, context: ExecutionContext, cmd: Command, operatorArguments: OperatorArguments): Boolean {
     val cmdLine = injector.commandLine.getActiveCommandLine() ?: return false
+    cmdLine.clearCurrentAction()
+
     val caretOffset = cmdLine.caret.offset
 
     val keyStroke = KeyStroke.getKeyStroke(cmd.argument!!.character)

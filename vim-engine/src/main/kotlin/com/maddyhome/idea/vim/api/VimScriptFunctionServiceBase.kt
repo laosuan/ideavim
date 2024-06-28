@@ -15,13 +15,12 @@ import com.maddyhome.idea.vim.vimscript.model.Script
 import com.maddyhome.idea.vim.vimscript.model.VimLContext
 import com.maddyhome.idea.vim.vimscript.model.expressions.Scope
 import com.maddyhome.idea.vim.vimscript.model.functions.DefinedFunctionHandler
-import com.maddyhome.idea.vim.vimscript.model.functions.EngineFunctionProvider
 import com.maddyhome.idea.vim.vimscript.model.functions.FunctionHandler
 import com.maddyhome.idea.vim.vimscript.model.functions.LazyVimscriptFunction
 import com.maddyhome.idea.vim.vimscript.model.functions.VimscriptFunctionProvider
 import com.maddyhome.idea.vim.vimscript.model.statements.FunctionDeclaration
 
-public abstract class VimScriptFunctionServiceBase : VimscriptFunctionService {
+abstract class VimScriptFunctionServiceBase : VimscriptFunctionService {
   private val logger = vimLogger<VimScriptFunctionServiceBase>()
 
   protected abstract val functionProviders: List<VimscriptFunctionProvider>

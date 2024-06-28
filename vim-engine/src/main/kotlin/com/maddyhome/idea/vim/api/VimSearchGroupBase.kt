@@ -36,7 +36,7 @@ import java.util.*
 import kotlin.math.max
 import kotlin.math.min
 
-public abstract class VimSearchGroupBase : VimSearchGroup {
+abstract class VimSearchGroupBase : VimSearchGroup {
 
   protected companion object {
     /**
@@ -48,24 +48,24 @@ public abstract class VimSearchGroupBase : VimSearchGroup {
     /**
      * Last string trailing a pattern. E.g. in '/pattern/e+2', 'e+2' is trailing.
      */
-    public var lastPatternTrailing: String? = ""
+    var lastPatternTrailing: String? = ""
 
     /**
      * Last used search direction.
      */
-    public var lastDirection: Direction = Direction.FORWARDS
+    var lastDirection: Direction = Direction.FORWARDS
 
     /**
      * The type of the last used pattern.
      */
-    public var lastPatternType: PatternType? = null
+    var lastPatternType: PatternType? = null
 
     /**
      * Last used substitute string.
      */
     private var lastSubstituteString: String? = null
 
-    public var lastReplaceString: String? = null
+    var lastReplaceString: String? = null
 
     private val CLASS_NAMES: List<String> = listOf(
       "alnum:]",
@@ -94,7 +94,7 @@ public abstract class VimSearchGroupBase : VimSearchGroup {
    * @param startLine The number of the line where to start highlighting (inclusive)
    * @param endLine   The number of the line where to stop highlighting (inclusive)
    */
-  protected abstract fun highlightSearchLines(
+  abstract fun highlightSearchLines(
     editor: VimEditor,
     startLine: Int,
     endLine: Int,
@@ -110,7 +110,7 @@ public abstract class VimSearchGroupBase : VimSearchGroup {
   /**
    * Reset the search highlights to the last used pattern after highlighting incsearch results.
    */
-  protected abstract fun resetIncsearchHighlights()
+  abstract fun resetIncsearchHighlights()
 
   /**
    * Asks the user how to deal with a substitution confirmation choice.
@@ -219,7 +219,7 @@ public abstract class VimSearchGroupBase : VimSearchGroup {
   // We can't just use VimRegex directly, but need a method to create it with the right values. Perhaps we should move
   // GlobalCommand into VimSearchGroup? processGlobalCommand, just like we've got processSearchCommand and
   // processSubstituteCommand?
-  public fun prepareRegex(pat: CharPointer, whichPattern: Int, patternSave: Int): VimRegex {
+  fun prepareRegex(pat: CharPointer, whichPattern: Int, patternSave: Int): VimRegex {
     var isNewPattern = true
     var pattern: String? = ""
     if (pat.isNul) {
@@ -260,6 +260,50 @@ public abstract class VimSearchGroupBase : VimSearchGroup {
 
     return VimRegex(pat.toString())
   }
+
+  // TODO I think that this method (and the method above) should be part of the global command
+  fun parseGlobalCommand(argument: String): GlobalCommandArguments? {
+    var cmd = CharPointer(StringBuffer(argument))
+
+    val pat: CharPointer
+    val delimiter: Char
+    var whichPat = 2 // RE_LAST
+
+    val messages = injector.messages
+    /*
+     * undocumented vi feature:
+     * "\/" and "\?": use previous search pattern.
+     *   "\&": use previous substitute pattern.
+     */
+    if (argument.isEmpty()) {
+      messages.showStatusBarMessage(null, messages.message("E148"))
+      messages.indicateError()
+      return null
+    } else if (cmd.charAt() == '\\') {
+      cmd.inc()
+      if ("/?&".indexOf(cmd.charAt()) == -1) {
+        messages.showStatusBarMessage(null, messages.message(Msg.e_backslash))
+        return null
+      }
+      whichPat = if (cmd.charAt() == '&') 1 /* RE_SUBST */ else 0 /* RE_SEARCH */
+      cmd.inc()
+      pat = CharPointer("") /* empty search pattern */
+    } else {
+      delimiter = cmd.charAt() /* get the delimiter */
+      cmd.inc()
+      pat = cmd.ref(0) /* remember start of pattern */
+      val endOfPattern = findEndOfPattern(cmd.toString(), delimiter)
+      if (cmd.charAt(endOfPattern) == delimiter) {
+        cmd.set('\u0000', endOfPattern)
+      }
+      // It is needed for the following [cmd.toString()]
+      // `endOfPattern + 1` is delimiter and `endOfPattern + 2` is char after the delimiter (command start)
+      cmd.pointer = endOfPattern + 2
+    }
+    return GlobalCommandArguments(pat, whichPat, cmd.toString())
+  }
+
+  data class GlobalCommandArguments(val pattern: CharPointer, val whichPattern: Int, val command: String)
 
   /****************************************************************************/
   /* Search related methods                                                   */
@@ -429,6 +473,36 @@ public abstract class VimSearchGroupBase : VimSearchGroup {
     return if (offset == -1) range.startOffset else offset
   }
 
+  override fun findEndOfPattern(
+    command: String,
+    delimiter: Char,
+    startIndex: Int,
+  ): Int {
+    var magic = true
+
+    var i = startIndex
+    while (i < command.length) {
+      // delimiter found
+      if (command[i] == delimiter) break
+
+      // collection start found, ignore until end of collection
+      if (magic && command[i] == '[' ||
+        !magic && command[i] == '\\' && i + 1 < command.length && command[i + 1] == '[') {
+
+        i = findEndOfCollection(command, i)
+        // skip escaped char
+      } else if (command[i] == '\\' && i + 1 < command.length) {
+        i++
+        // update magic
+        if (command[i] == 'v' || command[i] == 'm') magic = true
+        if (command[i] == 'V' || command[i] == 'M') magic = false
+      }
+      i++
+    }
+    return i
+  }
+
+
   private fun findNextSearchForGn(
     editor: VimEditor,
     count: Int,
@@ -480,35 +554,6 @@ public abstract class VimSearchGroupBase : VimSearchGroup {
       offset = findItOffset(editor, startOffset, count + 1, dir)?.first ?: -1
     }
     return offset
-  }
-
-  private fun findEndOfPattern(
-    command: String,
-    delimiter: Char,
-    startIndex: Int = 0
-  ): Int {
-    var magic = true
-
-    var i = startIndex
-    while (i < command.length) {
-      // delimiter found
-      if (command[i] == delimiter) break
-
-      // collection start found, ignore until end of collection
-      if (magic && command[i] == '[' ||
-        !magic && command[i] == '\\' && i + 1 < command.length && command[i + 1] == '[') {
-
-        i = findEndOfCollection(command, i)
-      // skip escaped char
-      } else if (command[i] == '\\' && i + 1 < command.length) {
-        i++
-        // update magic
-        if (command[i] == 'v' || command[i] == 'm') magic = true
-        if (command[i] == 'V' || command[i] == 'M') magic = false
-      }
-      i++
-    }
-    return i
   }
 
   private fun findEndOfCollection(
@@ -1139,7 +1184,7 @@ public abstract class VimSearchGroupBase : VimSearchGroup {
    * @param direction       The direction to search
    */
   @TestOnly
-  public fun setLastSearchState(
+  fun setLastSearchState(
     pattern: String,
     patternOffset: String,
     direction: Direction,
@@ -1154,7 +1199,7 @@ public abstract class VimSearchGroupBase : VimSearchGroup {
    * Resets the last state, purely for tests
    */
   @TestOnly
-  public open fun resetState() {
+  open fun resetState() {
     lastPatternType = PatternType.SEARCH
     lastSubstitutePattern = null
     lastSearchPattern = null
@@ -1165,7 +1210,7 @@ public abstract class VimSearchGroupBase : VimSearchGroup {
 
 
   protected abstract class SearchHighlight {
-    public abstract fun remove()
+    abstract fun remove()
   }
 
   protected enum class PatternType {

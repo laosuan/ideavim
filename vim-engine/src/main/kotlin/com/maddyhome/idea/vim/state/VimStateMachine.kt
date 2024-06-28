@@ -8,35 +8,22 @@
 
 package com.maddyhome.idea.vim.state
 
-import com.maddyhome.idea.vim.api.VimEditor
 import com.maddyhome.idea.vim.api.globalOptions
 import com.maddyhome.idea.vim.api.injector
 import com.maddyhome.idea.vim.command.Command
-import com.maddyhome.idea.vim.command.CommandBuilder
 import com.maddyhome.idea.vim.command.CommandFlags
-import com.maddyhome.idea.vim.command.MappingState
-import com.maddyhome.idea.vim.common.DigraphResult
-import com.maddyhome.idea.vim.common.DigraphSequence
 import com.maddyhome.idea.vim.impl.state.VimStateMachineImpl
 import com.maddyhome.idea.vim.state.mode.Mode
 import java.util.*
-import javax.swing.KeyStroke
 
 /**
  * Used to maintain state before and while entering a Vim command (operator, motion, text object, etc.)
  */
-public interface VimStateMachine {
-  @Deprecated("Please use KeyHandlerState instead")
-  public val commandBuilder: CommandBuilder
-  @Deprecated("Please use KeyHandlerState instead")
-  public val mappingState: MappingState
-  @Deprecated("Please use KeyHandlerState instead")
-  public val digraphSequence: DigraphSequence
-
-  public val mode: Mode
-  public var isDotRepeatInProgress: Boolean
-  public var isRegisterPending: Boolean
-  public val isReplaceCharacter: Boolean
+interface VimStateMachine {
+  val mode: Mode
+  var isDotRepeatInProgress: Boolean
+  var isRegisterPending: Boolean
+  val isReplaceCharacter: Boolean
 
   /**
    * The currently executing command
@@ -48,29 +35,22 @@ public interface VimStateMachine {
    *
    * This field is reset after the command has been executed.
    */
-  public var executingCommand: Command?
-  public fun isOperatorPending(mode: Mode): Boolean
-  public val executingCommandFlags: EnumSet<CommandFlags>
+  var executingCommand: Command?
+  val executingCommandFlags: EnumSet<CommandFlags>
 
-  public fun isDuplicateOperatorKeyStroke(key: KeyStroke, mode: Mode): Boolean
-
-  public fun resetRegisterPending()
-  public fun startLiteralSequence()
-  public fun processDigraphKey(key: KeyStroke, editor: VimEditor): DigraphResult
+  fun resetRegisterPending()
 
   /**
    * Toggles the insert/overwrite state. If currently insert, goto replace mode. If currently replace, goto insert
    * mode.
    */
-  public fun toggleInsertOverwrite()
+  fun toggleInsertOverwrite()
 
-  public fun startDigraphSequence()
-
-  public companion object {
+  companion object {
     private val globalState = VimStateMachineImpl()
 
     // TODO do we really need this method? Can't we use editor.vimStateMachine?
-    public fun getInstance(editor: Any?): VimStateMachine {
+    fun getInstance(editor: Any?): VimStateMachine {
       return if (editor == null || injector.globalOptions().ideaglobalmode) {
         globalState
       } else {

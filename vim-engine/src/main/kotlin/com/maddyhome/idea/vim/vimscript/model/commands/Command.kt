@@ -8,6 +8,7 @@
 
 package com.maddyhome.idea.vim.vimscript.model.commands
 
+import com.maddyhome.idea.vim.KeyHandler
 import com.maddyhome.idea.vim.api.ExecutionContext
 import com.maddyhome.idea.vim.api.VimCaret
 import com.maddyhome.idea.vim.api.VimEditor
@@ -22,7 +23,6 @@ import com.maddyhome.idea.vim.ex.ranges.LineRange
 import com.maddyhome.idea.vim.ex.ranges.Range
 import com.maddyhome.idea.vim.helper.Msg
 import com.maddyhome.idea.vim.helper.StrictMode
-import com.maddyhome.idea.vim.helper.vimStateMachine
 import com.maddyhome.idea.vim.state.mode.inNormalMode
 import com.maddyhome.idea.vim.state.mode.isBlock
 import com.maddyhome.idea.vim.vimscript.model.Executable
@@ -30,7 +30,7 @@ import com.maddyhome.idea.vim.vimscript.model.ExecutionResult
 import com.maddyhome.idea.vim.vimscript.model.VimLContext
 import java.util.*
 
-public sealed class Command(private val commandRange: Range, public val commandArgument: String) : Executable {
+sealed class Command(private val commandRange: Range, val commandArgument: String) : Executable {
   override lateinit var vimContext: VimLContext
   override lateinit var rangeInScript: TextRange
 
@@ -41,8 +41,8 @@ public sealed class Command(private val commandRange: Range, public val commandA
   private var nextArgumentTokenOffset = 0
   private val logger = vimLogger<Command>()
 
-  public abstract class ForEachCaret(range: Range, argument: String = "") : Command(range, argument) {
-    public abstract fun processCommand(
+  abstract class ForEachCaret(range: Range, argument: String = "") : Command(range, argument) {
+    abstract fun processCommand(
       editor: VimEditor,
       caret: VimCaret,
       context: ExecutionContext,
@@ -50,8 +50,8 @@ public sealed class Command(private val commandRange: Range, public val commandA
     ): ExecutionResult
   }
 
-  public abstract class SingleExecution(range: Range, argument: String = "") : Command(range, argument) {
-    public abstract fun processCommand(
+  abstract class SingleExecution(range: Range, argument: String = "") : Command(range, argument) {
+    abstract fun processCommand(
       editor: VimEditor,
       context: ExecutionContext,
       operatorArguments: OperatorArguments,
@@ -91,8 +91,10 @@ public sealed class Command(private val commandRange: Range, public val commandA
       return ExecutionResult.Error
     }
 
+    val keyHandler = KeyHandler.getInstance()
+    val keyState = keyHandler.keyHandlerState
     val operatorArguments = OperatorArguments(
-      editor.vimStateMachine.isOperatorPending(editor.mode),
+      keyHandler.isOperatorPending(editor.mode, keyState),
       0,
       editor.mode,
     )
@@ -168,7 +170,7 @@ public sealed class Command(private val commandRange: Range, public val commandA
     }
   }
 
-  public enum class RangeFlag {
+  enum class RangeFlag {
     /**
      * Indicates that a range must be specified with this command
      */
@@ -191,7 +193,7 @@ public sealed class Command(private val commandRange: Range, public val commandA
     RANGE_IS_COUNT,
   }
 
-  public enum class ArgumentFlag {
+  enum class ArgumentFlag {
     /**
      * Indicates that an argument must be specified with this command
      */
@@ -208,7 +210,7 @@ public sealed class Command(private val commandRange: Range, public val commandA
     ARGUMENT_FORBIDDEN,
   }
 
-  public enum class Access {
+  enum class Access {
     /**
      * Indicates that this is a command that modifies the editor
      */
@@ -225,7 +227,7 @@ public sealed class Command(private val commandRange: Range, public val commandA
     SELF_SYNCHRONIZED,
   }
 
-  public enum class Flag {
+  enum class Flag {
     /**
      * This command should not exit visual mode.
      *
@@ -235,7 +237,7 @@ public sealed class Command(private val commandRange: Range, public val commandA
     SAVE_VISUAL,
   }
 
-  public data class CommandHandlerFlags(
+  data class CommandHandlerFlags(
     val rangeFlag: RangeFlag,
     val argumentFlag: ArgumentFlag,
     val access: Access,
@@ -331,7 +333,7 @@ public sealed class Command(private val commandRange: Range, public val commandA
    * It would be cleaner to move incsearch handling into the search Command instances, which could access this data
    * safely.
    */
-  public fun getLineRangeSafe(editor: VimEditor): LineRange? {
+  fun getLineRangeSafe(editor: VimEditor): LineRange? {
     try {
       validate(editor)
     }

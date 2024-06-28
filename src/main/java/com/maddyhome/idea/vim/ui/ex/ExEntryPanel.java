@@ -31,8 +31,6 @@ import com.maddyhome.idea.vim.helper.SearchHighlightsHelper;
 import com.maddyhome.idea.vim.helper.UiHelper;
 import com.maddyhome.idea.vim.newapi.IjVimCaret;
 import com.maddyhome.idea.vim.newapi.IjVimEditor;
-import com.maddyhome.idea.vim.regexp.CharPointer;
-import com.maddyhome.idea.vim.regexp.RegExp;
 import com.maddyhome.idea.vim.ui.ExPanelBorder;
 import com.maddyhome.idea.vim.vimscript.model.commands.Command;
 import com.maddyhome.idea.vim.vimscript.model.commands.GlobalCommand;
@@ -130,7 +128,7 @@ public class ExEntryPanel extends JPanel implements VimCommandLine {
   }
 
   public @Nullable Editor getEditor() {
-    return weakEditor.get();
+    return weakEditor != null ? weakEditor.get() : null;
   }
 
   public void setEditor(@Nullable Editor editor) {
@@ -152,11 +150,11 @@ public class ExEntryPanel extends JPanel implements VimCommandLine {
   public void activate(@NotNull Editor editor, DataContext context, @NotNull String label, String initText) {
     logger.info("Activate ex entry panel");
     this.label.setText(label);
-    this.label.setFont(UiHelper.selectFont(label));
+    this.label.setFont(UiHelper.selectEditorFont(editor, label));
     entry.reset();
     entry.setEditor(editor, context);
     entry.setText(initText);
-    entry.setFont(UiHelper.selectFont(initText));
+    entry.setFont(UiHelper.selectEditorFont(editor, initText));
     entry.setType(label);
     parent = editor.getContentComponent();
 
@@ -275,7 +273,7 @@ public class ExEntryPanel extends JPanel implements VimCommandLine {
     @Override
     protected void textChanged(@NotNull DocumentEvent e) {
       String text = entry.getText();
-      Font newFont = UiHelper.selectFont(text);
+      Font newFont = UiHelper.selectEditorFont(getEditor(), text);
       if (newFont != entry.getFont()) {
         entry.setFont(newFont);
       }
@@ -330,10 +328,8 @@ public class ExEntryPanel extends JPanel implements VimCommandLine {
 
         if (labelText.equals("/") || labelText.equals("?") || searchCommand) {
           final boolean forwards = !labelText.equals("?");  // :s, :g, :v are treated as forwards
-          final String pattern;
-          final CharPointer p = new CharPointer(searchText);
-          final CharPointer end = RegExp.skip_regexp(new CharPointer(searchText), separator, true);
-          pattern = p.substring(end.pointer() - p.pointer());
+          int pattenEnd = injector.getSearchGroup().findEndOfPattern(searchText, separator, 0);
+          final String pattern = searchText.substring(0, pattenEnd);
 
           VimPlugin.getEditor().closeEditorSearchSession(editor);
           final int matchOffset =
@@ -430,6 +426,9 @@ public class ExEntryPanel extends JPanel implements VimCommandLine {
 
       // Label background is automatically picked up
       label.setForeground(entry.getForeground());
+
+      // Make sure the panel is positioned correctly if we're changing font size
+      positionPanel();
     }
   }
 
@@ -447,8 +446,8 @@ public class ExEntryPanel extends JPanel implements VimCommandLine {
   }
 
   private void setFontForElements() {
-    label.setFont(UiHelper.selectFont(label.getText()));
-    entry.setFont(UiHelper.selectFont(getVisibleText()));
+    label.setFont(UiHelper.selectEditorFont(getEditor(), label.getText()));
+    entry.setFont(UiHelper.selectEditorFont(getEditor(), getVisibleText()));
   }
 
   private void positionPanel() {

@@ -71,7 +71,6 @@ import com.maddyhome.idea.vim.group.IjVimRedrawService
 import com.maddyhome.idea.vim.group.MotionGroup
 import com.maddyhome.idea.vim.group.OptionGroup
 import com.maddyhome.idea.vim.group.ScrollGroup
-import com.maddyhome.idea.vim.group.SearchGroup
 import com.maddyhome.idea.vim.group.VimMarkServiceImpl
 import com.maddyhome.idea.vim.group.visual.IdeaSelectionControl
 import com.maddyhome.idea.vim.group.visual.VimVisualTimer
@@ -94,6 +93,7 @@ import com.maddyhome.idea.vim.helper.vimDisabled
 import com.maddyhome.idea.vim.helper.vimInitialised
 import com.maddyhome.idea.vim.newapi.IjVimEditor
 import com.maddyhome.idea.vim.newapi.InsertTimeRecorder
+import com.maddyhome.idea.vim.newapi.IjVimSearchGroup
 import com.maddyhome.idea.vim.newapi.ij
 import com.maddyhome.idea.vim.newapi.vim
 import com.maddyhome.idea.vim.state.mode.inSelectMode
@@ -128,8 +128,23 @@ import javax.swing.SwingUtilities
  * Make sure the selected editor isn't the new editor, which can happen if there are no other editors open.
  */
 private fun getOpeningEditor(newEditor: Editor) = newEditor.project?.let { project ->
-  FileEditorManager.getInstance(project).selectedTextEditor?.takeUnless { it == newEditor }
+  // Some TextEditor implementations create a dummy Editor instance on demand, e.g., while downloading a file to edit
+  // (see BaseRemoteFileEditor). This can cause recursion if the newly opened/created TextEditor is also the currently
+  // selected TextEditor, because we will be notified of the new dummy Editor before it has finished initialisation, and
+  // try to get its opening editor, causing a new dummy Editor to be created and notifications sent, and so on.
+  // This was reported for 232 and 233 (see VIM-3066), but I can't recreate in 241. The callstack looks different, now
+  // using coroutines, so it's possible the deadlock has been broken. However, it's sensible to leave the recursion
+  // guard in.
+  if (openingEditorRecursionGuard) return null
+  openingEditorRecursionGuard = true
+  try {
+    FileEditorManager.getInstance(project).selectedTextEditor?.takeUnless { it == newEditor }
+  }
+  finally {
+    openingEditorRecursionGuard = false
+  }
 }
+private var openingEditorRecursionGuard = false
 
 internal object VimListenerManager {
 
@@ -351,13 +366,13 @@ internal object VimListenerManager {
   private object VimDocumentListener : DocumentListener {
     override fun beforeDocumentChange(event: DocumentEvent) {
       VimMarkServiceImpl.MarkUpdater.beforeDocumentChange(event)
-      SearchGroup.DocumentSearchListener.INSTANCE.beforeDocumentChange(event)
+      IjVimSearchGroup.DocumentSearchListener.INSTANCE.beforeDocumentChange(event)
       IjVimRedrawService.RedrawListener.beforeDocumentChange(event)
     }
 
     override fun documentChanged(event: DocumentEvent) {
       VimMarkServiceImpl.MarkUpdater.documentChanged(event)
-      SearchGroup.DocumentSearchListener.INSTANCE.documentChanged(event)
+      IjVimSearchGroup.DocumentSearchListener.INSTANCE.documentChanged(event)
       IjVimRedrawService.RedrawListener.documentChanged(event)
     }
   }
@@ -726,7 +741,7 @@ internal object VimListenerManager {
           injector.processGroup.cancelExEntry(editor.vim, false)
         }
 
-        ExOutputModel.getInstance(editor).clear()
+        ExOutputModel.getInstance(editor).close()
 
         val caretModel = editor.caretModel
         if (editor.vim.mode.selectionType != null) {
@@ -757,7 +772,7 @@ internal object VimListenerManager {
           injector.processGroup.cancelExEntry(event.editor.vim, false)
         }
 
-        ExOutputModel.getInstance(event.editor).clear()
+        ExOutputModel.getInstance(event.editor).close()
       }
     }
   }

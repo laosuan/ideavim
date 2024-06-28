@@ -57,8 +57,9 @@ import com.maddyhome.idea.vim.helper.CharacterHelper.changeCase
 import com.maddyhome.idea.vim.helper.CharacterHelper.charType
 import com.maddyhome.idea.vim.helper.EditorHelper
 import com.maddyhome.idea.vim.helper.NumberType
-import com.maddyhome.idea.vim.helper.SearchHelper
 import com.maddyhome.idea.vim.helper.endOffsetInclusive
+import com.maddyhome.idea.vim.helper.findNumberUnderCursor
+import com.maddyhome.idea.vim.helper.findNumbersInRange
 import com.maddyhome.idea.vim.helper.inInsertMode
 import com.maddyhome.idea.vim.helper.moveToInlayAwareLogicalPosition
 import com.maddyhome.idea.vim.helper.moveToInlayAwareOffset
@@ -84,7 +85,7 @@ import kotlin.math.min
 /**
  * Provides all the insert/replace related functionality
  */
-public class ChangeGroup : VimChangeGroupBase() {
+class ChangeGroup : VimChangeGroupBase() {
   private val insertListeners = ContainerUtil.createLockFreeCopyOnWriteList<VimInsertListener>()
   private val listener: EditorMouseListener = object : EditorMouseListener {
     override fun mouseClicked(event: EditorMouseEvent) {
@@ -95,7 +96,7 @@ public class ChangeGroup : VimChangeGroupBase() {
     }
   }
 
-  public fun editorCreated(editor: Editor?, disposable: Disposable) {
+  fun editorCreated(editor: Editor?, disposable: Disposable) {
     EventFacade.getInstance().addEditorMouseListener(editor!!, listener, disposable)
   }
 
@@ -657,7 +658,7 @@ public class ChangeGroup : VimChangeGroupBase() {
     val alpha = nf.contains("alpha")
     val hex = nf.contains("hex")
     val octal = nf.contains("octal")
-    val numberRanges = SearchHelper.findNumbersInRange((editor as IjVimEditor).editor, selectedRange, alpha, hex, octal)
+    val numberRanges = findNumbersInRange((editor as IjVimEditor).editor, selectedRange, alpha, hex, octal)
     val newNumbers: MutableList<String?> = ArrayList()
     for (i in numberRanges.indices) {
       val numberRange = numberRanges[i]
@@ -680,8 +681,7 @@ public class ChangeGroup : VimChangeGroupBase() {
     val alpha = nf.contains("alpha")
     val hex = nf.contains("hex")
     val octal = nf.contains("octal")
-    val range =
-      SearchHelper.findNumberUnderCursor((editor as IjVimEditor).editor, (caret as IjVimCaret).caret, alpha, hex, octal)
+    val range = findNumberUnderCursor((editor as IjVimEditor).editor, (caret as IjVimCaret).caret, alpha, hex, octal)
     if (range == null) {
       logger.debug("no number on line")
       return false
@@ -790,11 +790,11 @@ public class ChangeGroup : VimChangeGroupBase() {
     return number
   }
 
-  public fun addInsertListener(listener: VimInsertListener) {
+  fun addInsertListener(listener: VimInsertListener) {
     insertListeners.add(listener)
   }
 
-  public fun removeInsertListener(listener: VimInsertListener) {
+  fun removeInsertListener(listener: VimInsertListener) {
     insertListeners.remove(listener)
   }
 

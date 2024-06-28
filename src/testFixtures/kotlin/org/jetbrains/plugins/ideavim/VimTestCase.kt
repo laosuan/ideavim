@@ -320,7 +320,7 @@ abstract class VimTestCase {
     return fixture.editor
   }
 
-  public fun configureByTextX(fileName: String, content: String): Editor {
+  fun configureByTextX(fileName: String, content: String): Editor {
     fixture.configureByText(fileName, content)
     setDefaultIntelliJSettings(fixture.editor)
     NeovimTesting.setupEditor(fixture.editor, testInfo)
@@ -672,7 +672,7 @@ abstract class VimTestCase {
 
   fun assertNoExOutput() {
     val actual = ExOutputModel.getInstance(fixture.editor).text
-    assertNull(actual, "Ex output not null")
+    assertEquals("", actual)
   }
 
   fun assertPluginError(isError: Boolean) {

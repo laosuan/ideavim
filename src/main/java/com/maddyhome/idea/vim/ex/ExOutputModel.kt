@@ -14,7 +14,7 @@ import com.maddyhome.idea.vim.helper.vimExOutput
 import com.maddyhome.idea.vim.ui.ExOutputPanel
 
 // TODO: We need a nicer way to handle output, especially wrt testing, appending + clearing
-public class ExOutputModel private constructor(private val myEditor: Editor) : VimExOutputPanel {
+class ExOutputModel private constructor(private val myEditor: Editor) : VimExOutputPanel {
   private var isActiveInTestMode = false
 
   override val isActive: Boolean
@@ -28,14 +28,18 @@ public class ExOutputModel private constructor(private val myEditor: Editor) : V
     get() = if (!ApplicationManager.getApplication().isUnitTestMode) {
       ExOutputPanel.getInstance(myEditor).text
     } else {
-      field
+      // ExOutputPanel always returns a non-null string
+      field ?: ""
     }
     set(value) {
+      // ExOutputPanel will strip a trailing newline. We'll do it now so that tests have the same behaviour. We also
+      // never pass null to ExOutputPanel, but we do store it for tests, so we know if we're active or not
+      val newValue = value?.removeSuffix("\n")
       if (!ApplicationManager.getApplication().isUnitTestMode) {
-        ExOutputPanel.getInstance(myEditor).setText(value ?: "")
+        ExOutputPanel.getInstance(myEditor).setText(newValue ?: "")
       } else {
-        field = value
-        isActiveInTestMode = !value.isNullOrEmpty()
+        field = newValue
+        isActiveInTestMode = !newValue.isNullOrEmpty()
       }
     }
 
@@ -56,9 +60,9 @@ public class ExOutputModel private constructor(private val myEditor: Editor) : V
     }
   }
 
-  public companion object {
+  companion object {
     @JvmStatic
-    public fun getInstance(editor: Editor): ExOutputModel {
+    fun getInstance(editor: Editor): ExOutputModel {
       var model = editor.vimExOutput
       if (model == null) {
         model = ExOutputModel(editor)

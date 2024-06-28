@@ -8,7 +8,23 @@
 
 package com.maddyhome.idea.vim.regexp
 
+import com.maddyhome.idea.vim.api.BufferPosition
+import com.maddyhome.idea.vim.api.ExecutionContext
+import com.maddyhome.idea.vim.api.ImmutableVimCaret
+import com.maddyhome.idea.vim.api.LineDeleteShift
+import com.maddyhome.idea.vim.api.VimCaret
+import com.maddyhome.idea.vim.api.VimCaretListener
+import com.maddyhome.idea.vim.api.VimDocument
 import com.maddyhome.idea.vim.api.VimEditor
+import com.maddyhome.idea.vim.api.VimFoldRegion
+import com.maddyhome.idea.vim.api.VimScrollingModel
+import com.maddyhome.idea.vim.api.VimSelectionModel
+import com.maddyhome.idea.vim.api.VimVisualPosition
+import com.maddyhome.idea.vim.api.VirtualFile
+import com.maddyhome.idea.vim.command.OperatorArguments
+import com.maddyhome.idea.vim.common.LiveRange
+import com.maddyhome.idea.vim.common.TextRange
+import com.maddyhome.idea.vim.ex.ExException
 import com.maddyhome.idea.vim.helper.noneOfEnum
 import com.maddyhome.idea.vim.regexp.engine.VimRegexEngine
 import com.maddyhome.idea.vim.regexp.engine.nfa.NFA
@@ -18,7 +34,9 @@ import com.maddyhome.idea.vim.regexp.parser.CaseSensitivitySettings
 import com.maddyhome.idea.vim.regexp.parser.VimRegexParser
 import com.maddyhome.idea.vim.regexp.parser.VimRegexParserResult
 import com.maddyhome.idea.vim.regexp.parser.visitors.PatternVisitor
-import java.util.EnumSet
+import com.maddyhome.idea.vim.state.mode.Mode
+import com.maddyhome.idea.vim.state.mode.SelectionType
+import java.util.*
 
 /**
  * Represents a compiled Vim pattern. Provides methods to
@@ -27,7 +45,7 @@ import java.util.EnumSet
  * @see :help /pattern
  *
  */
-public class VimRegex(pattern: String) {
+class VimRegex(pattern: String) {
   /**
    * TODO: in my opinion only the find() and findAll() methods are necessary.
    *
@@ -79,7 +97,7 @@ public class VimRegex(pattern: String) {
    *
    * @return True if any match was found, false otherwise
    */
-  public fun containsMatchIn(
+  fun containsMatchIn(
     editor: VimEditor,
     options: EnumSet<VimRegexOptions> = noneOfEnum()
   ): Boolean {
@@ -94,6 +112,13 @@ public class VimRegex(pattern: String) {
     return false
   }
 
+  internal fun containsMatchIn(
+    text: String,
+    options: EnumSet<VimRegexOptions> = noneOfEnum()
+  ): Boolean {
+    return containsMatchIn(VimEditorWrapper(text), options)
+  }
+
   /**
    * Returns the first match of a pattern in the editor, that comes after the startIndex
    *
@@ -104,7 +129,7 @@ public class VimRegex(pattern: String) {
    *
    * @return The first match found in the editor after startIndex
    */
-  public fun findNext(
+  fun findNext(
     editor: VimEditor,
     startIndex: Int = 0,
     options: EnumSet<VimRegexOptions> = noneOfEnum()
@@ -149,6 +174,14 @@ public class VimRegex(pattern: String) {
     return VimMatchResult.Failure(VimRegexErrors.E486)
   }
 
+  internal fun findNext(
+    text: String,
+    startIndex: Int = 0,
+    options: EnumSet<VimRegexOptions> = noneOfEnum()
+  ): VimMatchResult {
+    return findNext(VimEditorWrapper(text), startIndex, options)
+  }
+
   /**
    * Returns the first match of a pattern in the editor, that comes before the startIndex
    *
@@ -159,7 +192,7 @@ public class VimRegex(pattern: String) {
    *
    * @return The first match found in the editor before startIndex
    */
-  public fun findPrevious(
+  fun findPrevious(
     editor: VimEditor,
     startIndex: Int = 0,
     options: EnumSet<VimRegexOptions> = noneOfEnum()
@@ -178,6 +211,14 @@ public class VimRegex(pattern: String) {
       // there are no matches in the entire file
       return VimMatchResult.Failure(VimRegexErrors.E486)
     }
+  }
+
+  internal fun findPrevious(
+    text: String,
+    startIndex: Int = 0,
+    options: EnumSet<VimRegexOptions> = noneOfEnum()
+  ): VimMatchResult {
+    return findPrevious(VimEditorWrapper(text), startIndex, options)
   }
 
   /**
@@ -226,7 +267,7 @@ public class VimRegex(pattern: String) {
    *
    * @return All the matches found in the editor
    */
-  public fun findAll(
+  fun findAll(
     editor: VimEditor,
     startIndex: Int = 0,
     maxIndex: Int = editor.text().length,
@@ -260,6 +301,15 @@ public class VimRegex(pattern: String) {
     return foundMatches
   }
 
+  internal fun findAll(
+    text: String,
+    startIndex: Int = 0,
+    maxIndex: Int = text.length,
+    options: EnumSet<VimRegexOptions> = noneOfEnum()
+  ): List<VimMatchResult.Success> {
+    return findAll(VimEditorWrapper(text), startIndex, maxIndex, options)
+  }
+
   /**
    * Searches for a match of a pattern on a give line, starting at a certain column.
    *
@@ -267,13 +317,22 @@ public class VimRegex(pattern: String) {
    * @param line       The number of the line where to look for the match in
    * @param column     The column of that line where to start looking for a match
    */
-  public fun findInLine(
+  fun findInLine(
     editor: VimEditor,
     line: Int,
     column: Int = 0,
     options: EnumSet<VimRegexOptions> = noneOfEnum()
   ): VimMatchResult {
     return simulateNonExactNFA(editor, editor.getLineStartOffset(line) + column, options)
+  }
+
+  internal fun findInLine(
+    text: String,
+    line: Int,
+    column: Int = 0,
+    options: EnumSet<VimRegexOptions> = noneOfEnum()
+  ): VimMatchResult {
+    return findInLine(VimEditorWrapper(text), line, column, options)
   }
 
   /**
@@ -289,7 +348,7 @@ public class VimRegex(pattern: String) {
    * @param column               The column of that line where to start looking for a match
    * @param takeLiterally        Whether to always take the string literally, meaning no character has a special meaning
    */
-  public fun substitute(
+  fun substitute(
     editor: VimEditor,
     substituteString: String,
     lastSubstituteString: String,
@@ -398,12 +457,20 @@ public class VimRegex(pattern: String) {
    *
    * @return The match, either successful or not, found at the specified index
    */
-  public fun matchAt(
+  fun matchAt(
     editor: VimEditor,
     index: Int,
     options: EnumSet<VimRegexOptions> = noneOfEnum()
   ): VimMatchResult {
     return simulateNFA(editor, index, options)
+  }
+
+  internal fun matchAt(
+    text: String,
+    index: Int,
+    options: EnumSet<VimRegexOptions> = noneOfEnum()
+  ): VimMatchResult {
+    return matchAt(VimEditorWrapper(text), index, options)
   }
 
   /**
@@ -413,7 +480,7 @@ public class VimRegex(pattern: String) {
    *
    * @return The match, either successful or not, when matching against the entire editor
    */
-  public fun matchEntire(
+  fun matchEntire(
     editor: VimEditor,
     options: EnumSet<VimRegexOptions> = noneOfEnum()
   ): VimMatchResult {
@@ -427,6 +494,13 @@ public class VimRegex(pattern: String) {
     }
   }
 
+  internal fun matchEntire(
+    text: String,
+    options: EnumSet<VimRegexOptions> = noneOfEnum()
+  ): VimMatchResult {
+    return matchEntire(VimEditorWrapper(text), options)
+  }
+
   /**
    * Indicates whether the pattern matches the entire editor.
    *
@@ -434,7 +508,7 @@ public class VimRegex(pattern: String) {
    *
    * @return True if the entire editor matches, false otherwise
    */
-  public fun matches(
+  fun matches(
     editor: VimEditor,
     options: EnumSet<VimRegexOptions> = noneOfEnum()
   ): Boolean {
@@ -445,6 +519,13 @@ public class VimRegex(pattern: String) {
     }
   }
 
+  fun matches(
+    text: String,
+    options: EnumSet<VimRegexOptions> = noneOfEnum()
+  ): Boolean {
+    return matches(VimEditorWrapper(text), options)
+  }
+
   /**
    * Checks if a pattern matches a part of the editor
    * starting exactly at the specified index.
@@ -453,7 +534,7 @@ public class VimRegex(pattern: String) {
    *
    * @return True if there is a successful match starting at the specified index, false otherwise
    */
-  public fun matchesAt(
+  fun matchesAt(
     editor: VimEditor,
     index: Int,
     options: EnumSet<VimRegexOptions> = noneOfEnum()
@@ -462,6 +543,14 @@ public class VimRegex(pattern: String) {
       is VimMatchResult.Success -> true
       is VimMatchResult.Failure -> false
     }
+  }
+
+  internal fun matchesAt(
+    text: String,
+    index: Int,
+    options: EnumSet<VimRegexOptions> = noneOfEnum()
+  ): Boolean {
+    return matchesAt(VimEditorWrapper(text), index, options)
   }
 
   /**
@@ -501,4 +590,193 @@ public class VimRegex(pattern: String) {
       CaseSensitivitySettings.DEFAULT -> options.contains(VimRegexOptions.IGNORE_CASE) && !(options.contains(VimRegexOptions.SMART_CASE) && hasUpperCase)
     }
   }
+
+  private class VimEditorWrapper(private val text: String): VimEditor {
+    override val lfMakesNewLine: Boolean = true
+    override var vimChangeActionSwitchMode: Mode? = null
+
+    override fun fileSize(): Long {
+      return text.length.toLong()
+    }
+
+    override fun text(): CharSequence = text
+
+    override fun nativeLineCount(): Int {
+      return text.count { it == '\n' } + 1
+    }
+
+    override fun getLineRange(line: Int): Pair<Int, Int> {
+      return getLineStartOffset(line) to getLineEndOffset(line)
+    }
+
+    override fun carets(): List<VimCaret> = emptyList()
+
+    override fun nativeCarets(): List<VimCaret> = emptyList()
+
+    override fun forEachCaret(action: (VimCaret) -> Unit) {}
+
+    override fun forEachNativeCaret(action: (VimCaret) -> Unit, reverse: Boolean) {}
+
+    override fun isInForEachCaretScope(): Boolean = false
+
+    override fun primaryCaret(): VimCaret {
+      throw ExException("No caret present")
+    }
+
+    override fun currentCaret(): VimCaret {
+      throw ExException("No caret present")
+    }
+
+    override fun isWritable(): Boolean = false
+
+    override fun isDocumentWritable(): Boolean = false
+
+    override fun isOneLineMode(): Boolean = false
+
+    override fun search(
+      pair: Pair<Int, Int>,
+      editor: VimEditor,
+      shiftType: LineDeleteShift,
+    ): Pair<Pair<Int, Int>, LineDeleteShift>? {
+      TODO("Not yet implemented")
+    }
+
+    override fun offsetToBufferPosition(offset: Int): BufferPosition {
+      if (offset < 0 || offset > text.length) return BufferPosition(-1, -1)
+
+      var line = 0
+      var lastLineStart = 0
+
+      for (i in 0 until offset) {
+        if (text[i] == '\n') {
+          line++
+          lastLineStart = i + 1
+        }
+      }
+
+      val column = offset - lastLineStart
+      return BufferPosition(line, column)
+    }
+
+    override fun bufferPositionToOffset(position: BufferPosition): Int {
+      val lines = text.lines()
+      var offset = 0
+      for (i in 0 until position.line) {
+        offset += lines[i].length + 1
+      }
+      offset += position.column
+      return offset
+    }
+
+    override fun offsetToVisualPosition(offset: Int): VimVisualPosition {
+      return bufferPositionToVisualPosition(offsetToBufferPosition(offset))
+    }
+
+    override fun visualPositionToOffset(position: VimVisualPosition): Int {
+      return bufferPositionToOffset(visualPositionToBufferPosition(position))
+    }
+
+    override fun visualPositionToBufferPosition(position: VimVisualPosition): BufferPosition {
+      return BufferPosition(position.line, position.column, position.leansRight)
+    }
+
+    override fun bufferPositionToVisualPosition(position: BufferPosition): VimVisualPosition {
+      return VimVisualPosition(position.line, position.column, position.leansForward)
+    }
+
+    override fun getVirtualFile(): VirtualFile? = null
+
+    override fun deleteString(range: TextRange) {}
+
+    override fun getSelectionModel(): VimSelectionModel {
+      TODO("Not yet implemented")
+    }
+
+    override fun getScrollingModel(): VimScrollingModel {
+      TODO("Not yet implemented")
+    }
+
+    override fun removeCaret(caret: VimCaret) {
+    }
+
+    override fun removeSecondaryCarets() {
+    }
+
+    override fun vimSetSystemBlockSelectionSilently(start: BufferPosition, end: BufferPosition) {
+    }
+
+    override fun getLineStartOffset(line: Int): Int {
+      if (line < 0) return -1
+      var currentLine = 0
+      for (index in text.indices) {
+        if (currentLine == line) return index
+        if (text[index] == '\n') currentLine++
+      }
+      return if (line == 0) 0 else -1
+    }
+
+    override fun getLineEndOffset(line: Int): Int {
+      if (line < 0) return -1
+      var currentLine = 0
+      for (index in text.indices) {
+        if (text[index] == '\n') {
+          if (currentLine == line) return index - 1
+          currentLine++
+        }
+      }
+      return if (line == currentLine) text.length - 1 else -1
+    }
+
+    override fun addCaretListener(listener: VimCaretListener) {}
+
+    override fun removeCaretListener(listener: VimCaretListener) {}
+
+    override fun isDisposed(): Boolean = false
+
+    override fun removeSelection() {}
+
+    override fun getPath(): String? = null
+
+    override fun extractProtocol(): String? = null
+
+    override val projectId: String = "no project, I am just a piece of text wrapped into an Enditor for Regexp to work"
+
+    override fun exitInsertMode(context: ExecutionContext, operatorArguments: OperatorArguments) {}
+
+    override fun exitSelectModeNative(adjustCaret: Boolean) {}
+
+    override var vimLastSelectionType: SelectionType? = null
+
+    override fun isTemplateActive(): Boolean = false
+
+    override fun startGuardedBlockChecking() {}
+    override fun stopGuardedBlockChecking() {}
+
+    override fun hasUnsavedChanges(): Boolean = false
+
+    override fun getLastVisualLineColumnNumber(line: Int): Int {
+      TODO("Not yet implemented")
+    }
+
+    override fun createLiveMarker(start: Int, end: Int): LiveRange {
+      TODO("Not yet implemented")
+    }
+
+    override var insertMode: Boolean = false
+    override val document: VimDocument
+      get() = TODO("Not yet implemented")
+
+    override fun createIndentBySize(size: Int): String {
+      TODO("Not yet implemented")
+    }
+
+    override fun getFoldRegionAtOffset(offset: Int): VimFoldRegion? {
+      return null
+    }
+
+    override fun <T : ImmutableVimCaret> findLastVersionOfCaret(caret: T): T? {
+      return null
+    }
+  }
 }
+

@@ -10,6 +10,7 @@ package com.maddyhome.idea.vim.extension.replacewithregister
 
 import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.editor.Editor
+import com.maddyhome.idea.vim.KeyHandler
 import com.maddyhome.idea.vim.VimPlugin
 import com.maddyhome.idea.vim.api.ExecutionContext
 import com.maddyhome.idea.vim.api.ImmutableVimCaret
@@ -28,7 +29,6 @@ import com.maddyhome.idea.vim.extension.VimExtensionFacade.putKeyMappingIfMissin
 import com.maddyhome.idea.vim.extension.exportOperatorFunction
 import com.maddyhome.idea.vim.group.visual.VimSelection
 import com.maddyhome.idea.vim.helper.exitVisualMode
-import com.maddyhome.idea.vim.helper.vimStateMachine
 import com.maddyhome.idea.vim.key.OperatorFunction
 import com.maddyhome.idea.vim.newapi.IjVimEditor
 import com.maddyhome.idea.vim.newapi.ij
@@ -166,13 +166,14 @@ private fun doReplace(editor: Editor, context: DataContext, caret: ImmutableVimC
     putToLine = -1,
   )
   val vimEditor = editor.vim
+  val keyHandler = KeyHandler.getInstance()
   ClipboardOptionHelper.IdeaputDisabler().use {
     VimPlugin.getPut().putText(
       vimEditor,
       context.vim,
       putData,
       operatorArguments = OperatorArguments(
-        editor.vimStateMachine?.isOperatorPending(vimEditor.mode) ?: false,
+        keyHandler.isOperatorPending(vimEditor.mode, keyHandler.keyHandlerState),
         0,
         editor.vim.mode,
       ),

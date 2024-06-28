@@ -32,7 +32,7 @@ import javax.swing.KeyStroke
  * @author vlan
  */
 @ExCommand(command = "map,nm[ap],vm[ap],xm[ap],smap,om[ap],im[ap],lm[ap],cm[ap],no[map],nn[oremap],vn[oremap],xn[oremap],snor[emap],ono[remap],no[remap],ino[remap],ln[oremap],cno[remap]")
-public data class MapCommand(val range: Range, val argument: String, val cmd: String) : Command.SingleExecution(range, argument) {
+data class MapCommand(val range: Range, val argument: String, val cmd: String) : Command.SingleExecution(range, argument) {
   override val argFlags: CommandHandlerFlags = flags(RangeFlag.RANGE_FORBIDDEN, ArgumentFlag.ARGUMENT_OPTIONAL, Access.READ_ONLY)
 
   @Throws(ExException::class)
@@ -131,7 +131,7 @@ public data class MapCommand(val range: Range, val argument: String, val cmd: St
     val secondArgument: String,
   )
 
-  public companion object {
+  companion object {
     private const val CTRL_V = '\u0016'
     private val COMMAND_INFOS = arrayOf(
       // TODO: Support smap, map!, lmap
@@ -157,12 +157,10 @@ public data class MapCommand(val range: Range, val argument: String, val cmd: St
   }
 
   private fun parseCommandArguments(input: String): CommandArguments? {
-    val firstBarSeparatedCommand = getFirstBarSeparatedCommand(input)
-
     val specialArguments = HashSet<SpecialArgument>()
     val toKeysBuilder = StringBuilder()
     var fromKeys: List<KeyStroke>? = null
-    firstBarSeparatedCommand.split(" ").dropLastWhile { it.isEmpty() }.forEach { part ->
+    input.split(" ").dropLastWhile { it.isEmpty() }.forEach { part ->
       if (fromKeys != null) {
         toKeysBuilder.append(" ")
         toKeysBuilder.append(part)
@@ -175,8 +173,8 @@ public data class MapCommand(val range: Range, val argument: String, val cmd: St
         }
       }
     }
-    for (i in firstBarSeparatedCommand.length - 1 downTo 0) {
-      val c = firstBarSeparatedCommand[i]
+    for (i in input.length - 1 downTo 0) {
+      val c = input[i]
       if (c == ' ') {
         toKeysBuilder.append(c)
       } else {
@@ -191,29 +189,5 @@ public data class MapCommand(val range: Range, val argument: String, val cmd: St
       }
       CommandArguments(specialArguments, it, toExpr, toKeysBuilder.toString().trimStart())
     }
-  }
-
-  private fun getFirstBarSeparatedCommand(input: String): String {
-    val inputBuilder = StringBuilder()
-    var escape = false
-    for (element in input) {
-      if (escape) {
-        escape = false
-        if (element != '|') {
-          inputBuilder.append('\\')
-        }
-        inputBuilder.append(element)
-      } else if (element == '\\' || element == CTRL_V) {
-        escape = true
-      } else if (element == '|') {
-        break
-      } else {
-        inputBuilder.append(element)
-      }
-    }
-    if (input.endsWith("\\")) {
-      inputBuilder.append("\\")
-    }
-    return inputBuilder.toString()
   }
 }
